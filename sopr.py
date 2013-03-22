@@ -1,16 +1,16 @@
 import mechanize
 import cookielib
 import datetime
+import csv
 from BeautifulSoup import BeautifulSoup
 import soupselect
 
 def count_rows(html):
 	bs = BeautifulSoup(html)
 	rows = soupselect.select(bs, 'table#searchResults tbody tr')
-	print rows
 	return len(rows)
 
-def main():
+def count_todays_registrations():
 	# Browser
 	br = mechanize.Browser()
 
@@ -45,47 +45,16 @@ def main():
 	br.submit()
 
 	br.select_form(nr=0)
-	br.form['datePostedStart'] = '03/21/2013'
-	# br.form['datePostedStart'] = datetime.datetime.now().strftime('%m/%d/%Y')	
+	br.form['datePostedStart'] = datetime.datetime.now().strftime('%m/%d/%Y')	
 	br.form['datePostedEnd'] = (datetime.datetime.now() + datetime.timedelta(days=1)).strftime('%m/%d/%Y')
 	br.submit()
 
-	print "found %d registrations" % count_rows(br.response().read())
+	return count_rows(br.response().read())
 
-	# "Showing 1 to 100 of 398 entries"
 
-	# # Open some site, let's pick a random one, the first that pops in mind:
-	# r = br.open('http://google.com')
-	# html = r.read()
-
-	# # Show the source
-	# print html
-	# # or
-	# print br.response().read()
-
-	# # Show the html title
-	# print br.title()
-
-	# # Show the response headers
-	# print r.info()
-	# # or
-	# print br.response().info()
-
-	# # Show the available forms
-	# for f in br.forms():
-	#     print f
-
-	# # Select the first (index zero) form
-	# br.select_form(nr=0)
-
-	# # Let's search
-	# br.form['q']='weekend codes'
-	# br.submit()
-	# print br.response().read()
-
-	# # Looking at some results in link format
-	# for l in br.links(url_regex='stockrt'):
-	#     print l
 
 if __name__ == '__main__':
-	main()
+	f = open('sopr_record.csv', 'a')
+	out = csv.writer(f)
+	out.writerow((datetime.datetime.now().isoformat(), count_todays_registrations()))
+	f.close()
