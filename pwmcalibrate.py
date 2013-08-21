@@ -2,6 +2,7 @@ import time, json, curses, wiringpi
 
 PWM_MAX = 1023
 DEFAULT_PIN = 1
+WIRINGPI_PWM_PIN = 1 # only pin 1 can handle hardware PWM
 DEFAULT_CALIBRATION_FILENAME = "calibration.json"
 
 class PWMCalibrator(object):
@@ -15,7 +16,13 @@ class PWMCalibrator(object):
 			self.wp = wiringpi_obj
 		else:
 			self.wp = wiringpi.GPIO(wiringpi.GPIO.WPI_MODE_PINS)
-		self.wp.pinMode(self.pin, self.wp.PWM_OUTPUT)
+		
+		if self.pin==WIRINGPI_PWM_PIN:
+			self.wp.pinMode(self.pin, self.wp.PWM_OUTPUT)
+			self.pwm_write = self.wp.pwmWrite
+		else:
+			self.wp.softPwmCreate(self.pin, 0, PWM_MAX)
+			self.pwm_write = self.wp.softPwmWrite
 
 		self.pwm_value = 0
 		self.calibration = []
@@ -56,12 +63,12 @@ class PWMCalibrator(object):
 		target_pwm_value = self._calculatePWM(value)
 		if self.smoothing is not None:
 			while self.pwm_value!=target_pwm_value:
-				delta = self.pwm_value>target_pwm_value and -1 or 1
-				self.wp.pwmWrite(self.pin, self.pwm_value + delta)
+				delta = self.pwm_value>target_pwm_value and -1 or 1				
+				self.pwm_write(self.pin, self.pwm_value + delta)
 				self.pwm_value = self.pwm_value + delta
 				time.sleep(self.smoothing)
 		else:
-			self.wp.pwmWrite(self.pin, target_pwm_value)
+			self.pwm_write(self.pin, target_pwm_value)
 			self.pwm_value = target_pwm_value
 
 
@@ -71,7 +78,7 @@ class PWMCalibrator(object):
 		self.calibration = []
 
 		# max the display, ask for trim pot adjustment
-		self.wp.pwmWrite(self.pin, PWM_MAX)
+		self.pwm_write(self.pin, PWM_MAX)
 		if steps==None:
 			steps = int(raw_input("Calibrate the trim pot until the meter is at maximum, then enter the desired number of steps and press <enter>: "))
 		else:
@@ -88,7 +95,7 @@ class PWMCalibrator(object):
 		# step down through the PWM range
 		current_step = steps - 1
 		for i in range(PWM_MAX, 0, -1):			
-			self.wp.pwmWrite(self.pin, i)
+			self.pwm_write(self.pin, i)
 
 			stdscr.addstr(0,0,"Press the spacebar when the meter reads %d" % (current_step))
 			
