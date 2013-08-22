@@ -1,6 +1,15 @@
 import time, json, curses, wiringpi
 
+SOFTPWM_SUPPORT = True
+try:
+	import wiringpi2 as wiringpi
+except Exception, e:
+	SOFTPWM_SUPPORT = False
+finally:
+	import wiringpi as wiringpi
+
 PWM_MAX = 1023
+SOFT_PWM_MAX = 100
 DEFAULT_PIN = 1
 WIRINGPI_PWM_PIN = 1 # only pin 1 can handle hardware PWM
 DEFAULT_CALIBRATION_FILENAME = "calibration.json"
@@ -10,6 +19,9 @@ class PWMCalibrator(object):
 	def __init__(self, pin=DEFAULT_PIN, calibration_file=None, smoothing=None, wiringpi_obj=None):
 		super(PWMCalibrator, self).__init__()
 		
+		if not SOFTPWM_SUPPORT and pin!=WIRINGPI_PWM_PIN:
+			raise Exception("No soft PWM support (is wiringpi2 installed?). Only pin 1 may be used.")
+
 		self.pin = pin
 
 		if wiringpi_obj is not None:
@@ -17,12 +29,15 @@ class PWMCalibrator(object):
 		else:
 			self.wp = wiringpi.GPIO(wiringpi.GPIO.WPI_MODE_PINS)
 		
-		if self.pin==WIRINGPI_PWM_PIN:
+		# PWM: hardware or software?
+		if (not SOFTPWM_SUPPORT) or (self.pin==WIRINGPI_PWM_PIN):
 			self.wp.pinMode(self.pin, self.wp.PWM_OUTPUT)
 			self.pwm_write = self.wp.pwmWrite
+			self.pwm_max = PWM_MAX
 		else:
-			self.wp.softPwmCreate(self.pin, 0, PWM_MAX)
+			self.wp.softPwmCreate(self.pin, 0, SOFT_PWM_MAX)
 			self.pwm_write = self.wp.softPwmWrite
+			self.pwm_max = SOFT_PWM_MAX
 
 		self.pwm_value = 0
 		self.calibration = []
@@ -78,14 +93,14 @@ class PWMCalibrator(object):
 		self.calibration = []
 
 		# max the display, ask for trim pot adjustment
-		self.pwm_write(self.pin, PWM_MAX)
+		self.pwm_write(self.pin, self.pwm_max)
 		if steps==None:
 			steps = int(raw_input("Calibrate the trim pot until the meter is at maximum, then enter the desired number of steps and press <enter>: "))
 		else:
 			raw_input("Calibrate the trim pot until the meter is at maximum (%d), then press <enter>" % steps)
 		
 		# set the top step
-		self.calibration.append((steps, PWM_MAX))
+		self.calibration.append((steps, self.pwm_max))
 
 		# init curses, preventing delay on keypress
 		stdscr = curses.initscr()
@@ -94,7 +109,7 @@ class PWMCalibrator(object):
 
 		# step down through the PWM range
 		current_step = steps - 1
-		for i in range(PWM_MAX, 0, -1):			
+		for i in range(self.pwm_max, 0, -1):			
 			self.pwm_write(self.pin, i)
 
 			stdscr.addstr(0,0,"Press the spacebar when the meter reads %d" % (current_step))
